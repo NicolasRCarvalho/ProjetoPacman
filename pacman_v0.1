@@ -1,0 +1,256 @@
+#include <stdio.h>
+#include <raylib.h>
+#include <stdlib.h>
+
+#define LAR_TELA 800
+#define ALT_TELA 640
+#define COLUNAS_MAPA 40
+#define LINHAS_MAPA 32
+#define TAM_PIXEL 20
+#define VEL_PACMAN 8 // Velocidade do Pac-Man
+
+
+typedef struct tipo_score
+{
+    char nome[30];
+    int score;
+} TIPO_SCORE;
+
+// Estrutura responsável por guardar posição e sentido de movimento do Pac-Man
+typedef struct pos_pacman
+{
+    int x, y; // Posição atual do Pac-Man
+    int dx, dy; // Sentido de movimento atual do Pac-Man
+} POS_PACMAN;
+
+// Função que exibe o menu
+int chama_menu()
+{
+    // Definindo variáveis locais
+    int posMarcador = 0;
+    // Inicializando tela
+    InitWindow(LAR_TELA, ALT_TELA, "MENU");
+    SetTargetFPS(60);
+
+    // Looping do menu
+    while (!WindowShouldClose())
+    {
+        BeginDrawing(); // Inicia o ambiente de desenho na tela
+        ClearBackground(BLACK); // Limpa a tela e define cor de fundo
+
+        // TEXTOS DO MENU
+        DrawText("PAC-MAN", 30, 20, 130, YELLOW);
+        DrawText("NOVO-JOGO", 30, 160, 80, YELLOW);
+        DrawText("CARREGAR-JOGO", 30, 260, 80, YELLOW);
+        DrawText("HIGHSCORES", 30, 360, 80, YELLOW);
+        DrawText("SAIR", 30, 460, 80, YELLOW);
+        DrawText("|W| |S| |ENTER|", 580, 600, 30, GRAY);
+
+        // LÓGICA DO MARCADOR DO MENU
+        if (IsKeyPressed(KEY_W)) posMarcador--;
+        if (IsKeyPressed(KEY_S)) posMarcador++;
+        // Posição 1 do marcador
+        if (posMarcador == 0)
+            DrawCircle(550, 195, 25, YELLOW);
+        // Posição 2 do marcador
+        if (posMarcador == 1)
+            DrawCircle(765, 295, 25, YELLOW);
+        // Posição 3 do marcador
+        if (posMarcador == 2)
+            DrawCircle(600, 398, 25, YELLOW);
+        // Posição 4 do marcador
+        if (posMarcador == 3)
+            DrawCircle(262, 498, 25, YELLOW);
+        // Lógica do vai e volta do marcador
+        if (posMarcador == 4)
+            posMarcador = 0;
+        if (posMarcador == -1)
+            posMarcador = 3;
+        // Lógica de seleção da opção
+        if (IsKeyPressed(KEY_ENTER))
+        {
+            CloseWindow();
+            return posMarcador;
+        }
+
+        EndDrawing();
+    }
+}
+
+// Função que puxa o mapa do arquivo .txt e passa as cordenadas iniciais do pacman
+void carrega_mapa(const char *nome_mapa, char matriz_mapa[LINHAS_MAPA][COLUNAS_MAPA], POS_PACMAN *pacman)
+{
+    // Definindo variáveis locais
+    FILE *mapa; // Ponteiro para o arquivo do mapa
+    int i, j; // Iterador
+
+    // Abrindo arquivo do mapa
+    mapa = fopen(nome_mapa, "r");
+    if (mapa == NULL)
+    {
+        printf("Erro ao abrir mapa");
+        return;
+    }
+
+    // Lendo o mapa do arquivo
+    for (i = 0; i < LINHAS_MAPA; i++)
+    {
+        fgets(matriz_mapa[i], COLUNAS_MAPA + 2, mapa); // +2 para incluir o '\n' e o '\0'
+        for (j = 0; j < COLUNAS_MAPA; j++)
+        {
+            if (matriz_mapa[i][j] == 'J')
+            {
+                pacman->x = j;
+                pacman->y = i;
+                pacman->dx = 0; // Inicialmente sem movimento
+                pacman->dy = 0;
+                matriz_mapa[i][j] = ' '; // Limpa a posição inicial no mapa
+            }
+        }
+    }
+
+    fclose(mapa);
+}
+
+// Função para imprimir mapa
+// Parede (caractere “W”).
+// Monstros (caractere “M”)
+// Frutas (caractere “F”)
+// Pastilhas (caractere “.”)
+// Superpastilhas (caractere “S”)
+// Jogador (caractere “J”)
+void desenha_mapa(char matriz_mapa[LINHAS_MAPA][COLUNAS_MAPA], POS_PACMAN pacman)
+{
+    // Definindo variáveis locais
+    int i, j;
+    for (i = 0; i < LINHAS_MAPA; i++)
+    {
+        for (j = 0; j < COLUNAS_MAPA; j++)
+        {
+            switch (matriz_mapa[i][j])
+            {
+            case 'W':
+                DrawRectangle(j * TAM_PIXEL, i * TAM_PIXEL, TAM_PIXEL, TAM_PIXEL, BLUE);
+                break;
+            case 'F':
+                DrawCircle(j * TAM_PIXEL + TAM_PIXEL / 2, i * TAM_PIXEL + TAM_PIXEL / 2, TAM_PIXEL / 2, RED);
+                break;
+            case 'M':
+                DrawCircle(j * TAM_PIXEL + TAM_PIXEL / 2, i * TAM_PIXEL + TAM_PIXEL / 2, TAM_PIXEL / 2, GREEN);
+                break;
+            case '.':
+                DrawCircle(j * TAM_PIXEL + TAM_PIXEL / 2, i * TAM_PIXEL + TAM_PIXEL / 2, TAM_PIXEL / 4, WHITE);
+                break;
+            case 'S':
+                DrawCircle(j * TAM_PIXEL + TAM_PIXEL / 2, i * TAM_PIXEL + TAM_PIXEL / 2, TAM_PIXEL / 2, ORANGE);
+                break;
+            default:
+                break;
+            }
+        }
+    }
+    DrawCircle(pacman.x * TAM_PIXEL + TAM_PIXEL / 2, pacman.y * TAM_PIXEL + TAM_PIXEL / 2, TAM_PIXEL / 2, YELLOW);
+}
+
+// Função para mover o Pac-Man
+// Ideia: Implementar funcao vai e vem, se chega em um extremo do mapa aparece em outro extremo
+void move_pacman(POS_PACMAN *pacman, char matriz_mapa[LINHAS_MAPA][COLUNAS_MAPA])
+{
+    int novoX = pacman->x + pacman->dx; // pacman->x é equivalente a (*pacman).x    um ponteiro pra pacman.x
+    int novoY = pacman->y + pacman->dy;
+
+    // Verifica se a nova posição é válida (não é uma parede)
+    if (novoX >= 0 && novoY < COLUNAS_MAPA && novoY >= 0 && novoY < LINHAS_MAPA && matriz_mapa[novoY][novoX] != 'W')
+    {
+        pacman->x = novoX;
+        pacman->y = novoY;
+    }
+}
+
+// Função principal do novo jogo
+void novo_jogo()
+{
+    // Definindo variáveis locais
+    char matriz_mapa[LINHAS_MAPA][COLUNAS_MAPA]; // Matriz do mapa
+    POS_PACMAN pacman; // Posição do Pac-Man
+    float timer = 0; // Temporizador para controlar a velocidade do Pac-Man
+
+    // Carregando primeiro mapa para a Matriz do mapa
+    carrega_mapa("mapa1.txt", matriz_mapa, &pacman);
+
+    // Inicializando tela
+    InitWindow(LAR_TELA, ALT_TELA, "MAPA1");
+    SetTargetFPS(60);
+
+    // Looping do jogo
+    while (!WindowShouldClose())
+    {
+        // Atualiza o temporizador
+        timer += GetFrameTime(); //float GetFrameTime(void); -> Retorna o tempo em segundos do último frame desenhado, (variacao de tempo)
+        // Movimentação do Pac-Man
+        if (IsKeyPressed(KEY_RIGHT))
+        {
+            pacman.dx = 1;
+            pacman.dy = 0;
+        }
+        if (IsKeyPressed(KEY_LEFT))
+        {
+            pacman.dx = -1;
+            pacman.dy = 0;
+        }
+        if (IsKeyPressed(KEY_UP))
+        {
+            pacman.dx = 0;
+            pacman.dy = -1;
+        }
+        if (IsKeyPressed(KEY_DOWN))
+        {
+            pacman.dx = 0;
+            pacman.dy = 1;
+        }
+
+        // Movimenta o Pac-Man apenas se o temporizador tiver atingido o valor da velocidade definida
+        if (timer >= 1/VEL_PACMAN) // (1/VEL_PACMAN) a velocidade está sendo dividida para o ajuste da velocidade ficar mais intuitivo no define
+        {
+            move_pacman(&pacman, matriz_mapa);
+            timer = 0; // Reseta o temporizador
+        }
+
+        BeginDrawing(); // Inicia o ambiente de desenho na tela
+        ClearBackground(BLACK); // Limpa a tela e define cor de fundo
+        desenha_mapa(matriz_mapa, pacman); // Chama função para desenhar mapa e Pac-Man
+        EndDrawing();
+    }
+
+    CloseWindow();
+}
+
+int main()
+{
+    int opcao = -1; // Indica a opção selecionada no menu
+
+    opcao = chama_menu();
+    // Retornar 0 -> Novo jogo
+    // Retornar 1 -> Carregar jogo
+    // Retornar 2 -> Abre ranking
+    // Retornar 3 -> Fecha jogo
+
+    // Chama função referente à opção selecionada
+    switch (opcao)
+    {
+    case 0:
+        novo_jogo();
+        break;
+    case 1:
+        // Código para carregar jogo
+        break;
+    case 2:
+        // Código para exibir ranking
+        break;
+    case 3:
+        // Código para sair do jogo
+        break;
+    }
+
+    return 0;
+}
